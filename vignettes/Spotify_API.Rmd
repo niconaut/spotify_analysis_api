@@ -99,7 +99,7 @@ colnames(master_df)[colnames(master_df) == "track name"] <- "track_name"
 # FORMATTING MASTER_DF FROM READ.CSV
 
 ```{r}
-master_df <- read.csv('C:/Users/Nico/Desktop/Code/Projects/Spotify/master_df_base.csv')
+master_df <- read.csv('path')
 
 master_df <- as_tibble(master_df)
 
@@ -157,8 +157,8 @@ subset(all_streams, all_streams$artist == 'Post Malone')
 # CLIENT_ID AND CLIENT_SECRET_ID
 
 ```{r}
-Sys.setenv(SPOTIFY_CLIENT_ID = 'a443232f235b4939ad31388a6764a9a7')
-Sys.setenv(SPOTIFY_CLIENT_SECRET = 'bc79d9db69b14b248f97416671bd7e18')
+Sys.setenv(SPOTIFY_CLIENT_ID = 'id')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = 'secret_id')
 
 get_spotify_access_token <- function(client_id = Sys.getenv('SPOTIFY_CLIENT_ID'), client_secret = Sys.getenv('SPOTIFY_CLIENT_SECRET')) {
 
@@ -388,10 +388,10 @@ dbSafeNames <- function(names) {
 colnames(master_df) <- dbSafeNames(colnames(master_df))
 
 # CONNECT TO THE DATABASE
-Sys.setenv(SQL_PASSWORD = 'sql')
+Sys.setenv(SQL_PASSWORD = 'password')
 pg <- dbDriver("PostgreSQL")
 driver <- dbDriver("PostgreSQL")
-dbconn <- dbConnect(driver, user="niconaut", password=Sys.getenv("SQL_PASSWORD"), host="localhost", port=5432, dbname="spotify")
+dbconn <- dbConnect(driver, user="user", password=Sys.getenv("SQL_PASSWORD"), host="localhost", port=port, dbname="spotify")
 ```
 
 ```{r}
@@ -412,7 +412,7 @@ master_df_sql <- master_df_sql %>%
 # ACCESSING THE WHOLE DATA FRAME
 
 ```{r}
-master_df <- read.csv('C:/Users/Nico/Desktop/Code/Projects/Spotify/master_df.csv')
+master_df <- read.csv('path')
 
 master_df <- as_tibble(master_df)
 
