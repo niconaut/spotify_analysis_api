@@ -1,6 +1,8 @@
-# spotify_project: using the Spotify API to do an analysis on the Top 200. Project for data visualization Course University Nebraska at Omaha.
+# spotify_project: using the Spotify API to do an analysis on the Top 200
 
-## Contributing Members:
+## Project for data visualization course University Nebraska at Omaha
+
+## Contributing Members
 
 Nicolaas VanSteenbergen, Trevor Koger, Christian Dauel, Ryan Fitzgibbons
 
@@ -11,7 +13,3 @@ Plots: Nicolaas VanSteenbergen, Trevor Koger, Christian Dauel, Ryan Fitzgibbons 
 ## Introduction
 
 Using Spotify's Top 200 charts pulled from thier website and the API, I analyze trends and develop interesting insights.
-
-## Insights
-
-<img src="images/Spotify_Project_Final.pdf" alt="final_poster"/>
