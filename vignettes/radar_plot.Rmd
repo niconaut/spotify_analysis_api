@@ -1,0 +1,48 @@
+---
+title: "Radar Plot"
+author: "Nicolaas VanSteenbergen"
+date: "8/8/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=F, warning=F}
+if(!require(dplyr)){install.packages("dplyr");require(dplyr)}
+if(!require(ggplot2)){install.packages("ggplot2");require(ggplot2)}
+if(!require(tools)){install.packages("tools");require(tools)}
+# if(!require(scales)){install.packages("scales");require(scales)}
+# if(!require(fmsb)){install.packages("fmsb");require(fmsb)}
+```
+
+```{r}
+master_df <- read.csv("master_df.csv", header = TRUE)
+
+audio_analysis <- master_df %>%
+  distinct(track_id, .keep_all = TRUE) %>%
+  select(energy,loudness,speechiness,acousticness,instrumentalness,liveness,valence)
+
+audio_analysis$loudness <- ((audio_analysis$loudness + 60)/60)
+
+audio_analysis <- as.data.frame(colMeans(audio_analysis))
+
+audio_analysis <- tibble::rownames_to_column(audio_analysis, var = "variable")
+
+names(audio_analysis)[2] <- "average"
+
+audio_analysis$variable <- toTitleCase(audio_analysis$variable)
+```
+
+```{r}
+audio_plot = ggplot(audio_analysis, aes(x = as.factor(variable), y = average)) +
+  geom_hline(yintercept = seq(0, 1, by = .25), colour = "#212121", size = 0.2) +
+  ylim(0,1) + theme_minimal() + coord_polar(clip = "off") +
+  theme(axis.text.y = element_text(hjust = 10), panel.grid = element_blank(), panel.grid.minor = element_line(size = 0.25, linetype = 'solid', colour = "black")) + xlab("") + ylab("") +
+  theme(axis.text = element_text(size=16), axis.title=element_text(size = 16, face = "bold"), axis.text.y = element_blank())
+
+audio_plot + geom_bar(stat = "identity", fill = alpha("#1DB954")) + geom_vline(xintercept = seq(0, 360, by = 45), colour = "#535353", size = 0.2)
+
+# ggsave("radar_plot.png",dpi=2000)
+```

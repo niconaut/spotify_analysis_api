@@ -1,0 +1,438 @@
+---
+title: "Spotify_API"
+author: "Nicolaas VanSteenbergen"
+date: "7/31/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages Required
+
+```{r, echo=F,warning=F,message=F}
+if(!require(dplyr)){install.packages("dplyr");require(dplyr)}
+if(!require(purrr)){install.packages("purrr");require(purrr)}
+if(!require(furrr)){install.packages("furrr");require(furrr)}
+if(!require(reshape2)){install.packages("reshape2");require(reshape2)}
+if(!require(data.table)){install.packages("data.table");require(data.table)}
+if(!require(stringr)){install.packages("stringr");require(stringr)}
+if(!require(readr)){install.packages("readr");require(readr)}
+if(!require(rvest)){install.packages("rvest");require(rvest)}
+if(!require(tm)){install.packages("tm");require(tm)}
+if(!require(future)){install.packages("future");require(future)}
+if(!require(httr)){install.packages("httr");require(httr)}
+if(!require(jsonlite)){install.packages("jsonlite");require(jsonlite)}
+if(!require(lubridate)){install.packages("lubridate");require(lubridate)}
+if(!require(RPostgreSQL)){install.packages("RPostgreSQL");require(RPostgreSQL)}
+if(!require(datasets)){install.packages("datasets");require(datasets)}
+```
+
+# URL CREATION
+
+```{r}
+dates_2018 <- seq(as.Date("2018-01-01"), as.Date("2018-12-31"), by="days")
+
+url_static <- "https://spotifycharts.com/regional/global/daily/"
+
+all_url <- paste(url_static,dates_2018[1:length(dates_2018)],"/download",sep="")
+```
+
+# MASTER_DF CREATION
+
+``` {r}
+make_header <- function(df) {
+  names(df) <- as.character(unlist(df[1,]))
+  df[-1,]
+}
+
+master_df <- NULL
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+daily_merged <- function(url_address) {
+  
+  df <- read.csv(url(url_address))
+  df <- make_header(df)
+  # df$date <- dates_2018[i]
+  # master_df <- rbind(master_df,df) ... 
+
+}
+
+# trial <- lapply(all_url, daily_merged)
+# trial
+# make a list of dataframes then just combine them later?
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# IF ABOVE DOESN'T WORK
+
+for (i in 1:length(all_url)) {
+  
+  df <- read.csv(url(all_url[i]))
+  df <- make_header(df)
+  df$date <- dates_2018[i]
+  master_df <- rbind(master_df,df)
+
+}
+
+row.names(master_df) <- NULL
+
+master_df$URL <- as.character(master_df$URL)
+
+master_df$track_id <- substring(master_df$URL,32)
+
+master_df$track_name <- as.character(master_df$track_name)
+
+master_df$artist <- as.character(master_df$artist)
+
+master_df$streams <- as.integer(master_df$streams)
+
+colnames(master_df) <- tolower(colnames(master_df))
+
+colnames(master_df)[colnames(master_df) == "track name"] <- "track_name"
+
+#write.csv(master_df, file = 'master_df_base.csv')
+```
+
+# FORMATTING MASTER_DF FROM READ.CSV
+
+```{r}
+master_df <- read.csv('C:/Users/Nico/Desktop/Code/Projects/Spotify/master_df_base.csv')
+
+master_df <- as_tibble(master_df)
+
+row.names(master_df) <- NULL
+
+master_df <- master_df[,-1]
+
+master_df$track_name <- as.character(master_df$track_name)
+
+master_df$artist <- as.character(master_df$artist)
+
+master_df$streams <- as.integer(master_df$streams)
+
+master_df$url <- as.character(master_df$url)
+
+master_df$date <- as.Date(master_df$date,format = '%m/%d/%Y')
+
+master_df$track_id <- as.character(master_df$track_id)
+
+master_df <- master_df %>%
+  select(position,artist,track_name,streams,date,url,track_id) %>%
+  arrange(date, desc(streams))
+```
+
+# INTERESTING INSIGHTS FROM MASTER_DF
+
+```{r}
+# NUMBER OF DAYS ON THE TOP 200
+length(unique(subset(master_df, master_df$artist == 'Drake')$date))
+
+# SPECIFIC DAYS ON THE TOP 200 (FOLLOWS MOVIE ANNOUNCEMENT AND AIRING)
+subset(master_df, master_df$artist == 'Queen')
+
+# TOTAL STREAMS BY ARTIST EACH DAY
+artist_by_day <- master_df %>%
+  select(artist, streams, date) %>%
+  group_by(artist, date) %>%
+  summarise(total_daily_streams = sum(streams)) %>%
+  arrange(date,desc(total_daily_streams))
+
+# TOP ARTISTS ON CHRISTMAS DAY
+subset(artist_by_day, artist_by_day$date == '2018-12-25')
+
+# TOTAL STREAMS BY EACH ARTIST
+all_streams <- master_df %>%
+  select(artist, streams, artist_id) %>%
+  group_by(artist, artist_id) %>%
+  summarise(total_streams = sum(as.numeric(streams))) %>%
+  arrange(desc(total_streams))
+
+# TOTAL STREAMS FOR POST MALONE
+subset(all_streams, all_streams$artist == 'Post Malone')
+```
+
+# CLIENT_ID AND CLIENT_SECRET_ID
+
+```{r}
+Sys.setenv(SPOTIFY_CLIENT_ID = 'a443232f235b4939ad31388a6764a9a7')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = 'bc79d9db69b14b248f97416671bd7e18')
+
+get_spotify_access_token <- function(client_id = Sys.getenv('SPOTIFY_CLIENT_ID'), client_secret = Sys.getenv('SPOTIFY_CLIENT_SECRET')) {
+
+    post <- POST('https://accounts.spotify.com/api/token',
+                 accept_json(), authenticate(client_id, client_secret),
+                 body = list(grant_type = 'client_credentials'),
+                 encode = 'form', httr::config(http_version = 2)) %>% content
+    
+    access_token <- post$access_token
+
+    return(access_token)
+}
+```
+
+# GET ARTIST_ID
+
+```{r}
+get_artist_id <- function(track_id, access_token = get_spotify_access_token()) {
+  
+  track_url <- paste('https://api.spotify.com/v1/tracks/',track_id,sep = '')
+  art_id <- GET(track_url,query = list(access_token = access_token)) %>% content
+  art_id <- art_id %>% .$artists
+  art_id <- art_id[[1]]$id
+  return(art_id)
+  
+}
+
+# CREATING DF OF UNIQUE ARTISTS
+unique_artist <- master_df %>%
+  select(artist, track_id) %>%
+  distinct(artist, .keep_all = TRUE) %>%
+  mutate(artist_id = NA)
+
+# GETTING THE ARTIST_ID FOR EACH ARTIST
+for (i in 1:nrow(unique_artist)) {
+  
+  unique_artist$artist_id[i] <- get_artist_id(unique_artist$track_id[i])
+
+}
+
+# MERGE ARTIST_ID ONTO MASTER_DF 
+unique_artist <- unique_artist %>%
+  select(artist,artist_id)
+
+merge_base <- data.table(master_df, key = "artist")
+art_id <- data.table(unique_artist, key = "artist")
+master_df <- merge(merge_base, art_id, by = "artist", all = FALSE)
+ 
+master_df <- master_df %>%
+  select(position,artist,track_name,streams,date,url,track_id,artist_id) %>%
+  arrange(date, desc(streams))
+
+# write.csv(master_df, file = 'master_df.csv')
+```
+
+# ARTIST FOLLOWERS
+
+```{r}
+get_artist_followers <- function(artist_id, access_token = get_spotify_access_token()) {
+  
+  artist_url <- paste('https://api.spotify.com/v1/artists/',artist_id,sep = '')
+  art_followers <- GET(artist_url,query = list(access_token = access_token)) %>% content
+  art_followers <- art_followers %>% .$followers %>% .$total
+  return(art_followers)
+  
+}
+```
+
+```{r}
+unique_artist$followers <- NULL
+
+for (i in 1:nrow(unique_artist)) {
+  
+  unique_artist$followers[i] <- get_artist_followers(unique_artist$artist_id[i])
+
+}
+```
+
+# ARTIST POPULARITY
+
+```{r}
+get_artist_popularity <- function(artist_id, access_token = get_spotify_access_token()) {
+  
+  artist_url <- paste('https://api.spotify.com/v1/artists/',artist_id,sep = '')
+  art_pop <- GET(artist_url,query = list(access_token = access_token)) %>% content
+  art_pop <- art_pop %>% .$popularity
+  return(art_pop)
+  
+}
+```
+
+```{r}
+unique_artist$popularity <- NULL
+
+for (i in 1:nrow(unique_artist)) {
+  
+  unique_artist$popularity[i] <- get_artist_popularity(unique_artist$artist_id[i])
+
+}
+```
+
+# MERGE UNIQUE_ARTIST WITH MASTER_DF
+
+```{r}
+master_df <- data.table(master_df, key = "artist_id")
+merge_artist <- data.table(unique_artist, key = "artist_id")
+master_df <- merge(master_df, merge_artist, by = c("artist_id","artist"), all = TRUE)
+
+master_df <- master_df %>%
+ select(position,artist,track_name,streams,date,followers,popularity,url,track_id,artist_id) %>%
+ arrange(date, desc(streams))
+
+# write.csv(master_df, file = 'master_df.csv')
+```
+
+# ARTIST GENRES
+
+```{r}
+get_artist_genre <- function(artist_id, access_token = get_spotify_access_token()) {
+  
+  artist_url <- paste('https://api.spotify.com/v1/artists/',artist_id,sep = '')
+  art_gen <- GET(artist_url,query = list(access_token = access_token)) %>% content
+  art_gen <- art_gen %>% .$genres
+  art_gen <- unlist(unlist(art_gen))
+  return(art_gen)
+
+}
+```
+
+```{r}
+# GETTING RID OF ARTISTS WITH NO SPOTIFY GENRE
+no_genre <- NULL
+
+for (i in 1:nrow(unique_artist)) {
+  art_temp <- get_artist_genre(unique_artist$artist_id[i])
+  if (is.null(art_temp)) {
+    no_genre <- c(no_genre, unique_artist$artist_id[i])
+  }
+}
+
+unique_genre <- unique_artist[!(unique_artist$artist_id %in% no_genre),]
+```
+
+```{r}
+# GETTING THE GENRE OF EACH ARTIST AND STORING THEM IN INDIVIDUAL COLUMNS
+genres <- unique_genre %>%
+  mutate(g1 = "", g2 = "", g3 = "", g4 = "", g5 = "", g6 = "", g7 = "", g8 = "", g9 = "", g10 = "", g11 = "", g12 = "", g13 = "", g14 = "", g15 = "", g16 = "", g17 = "", g18 = "", g19 = "", g20 = "")
+
+for (i in 1:nrow(unique_genre)) {
+  
+  artist_temp <- get_artist_genre(unique_artist_genre$artist_id[i])
+  length(artist_temp) <- 20
+  genres[,c('g1','g2','g3','g4','g5','g6','g7','g8','g9','g10',
+            'g11','g12','g13','g14','g15','g16','g17','g18',
+            'g19','g20')][i,] <- artist_temp
+  
+}
+
+# SAVE JUST THE ARTIST GENRES
+# write.csv(genres, file = 'artist_genres.csv')
+
+# MERGE WITH MASTER
+merge_master <- data.table(master_df, key = "artist_id")
+merge_genre <- data.table(genres, key = "artist_id")
+master_df <- merge(merge_master, merge_genre, by = c("artist_id","artist"), all = TRUE)
+
+master_df <- master_df %>%
+ select(position,artist,track_name,streams,date,followers,popularity,url,track_id,artist_id,g1,g2,g3,g4,g5,g6,g7,g8,g9,g10,g11,g12,g13,g14,g15,g16,g17,g18,g19,g20) %>%
+ arrange(date, desc(streams))
+
+# write.csv(master_df, file = 'master_df.csv')
+```
+
+# AUDIO ANALYSIS
+
+```{r}
+get_audio_features <- function(track_id, access_token = get_spotify_access_token()) {
+  
+  track_url <- paste('https://api.spotify.com/v1/audio-features/',track_id,sep = '')
+  track_feat <- GET(track_url,query = list(access_token = access_token)) %>% content
+  return(track_feat)
+  
+}
+
+unique_tracks <- master_df %>%
+  select(track_id) %>%
+  distinct(track_id, .keep_all = TRUE) %>%
+  mutate(energy = as.integer(""), key = as.integer(""), loudness = as.integer(""), mode = as.integer(""), speechiness = as.integer(""), acousticness = as.integer(""), instrumentalness = as.integer(""), liveness = as.integer(""), valence = as.integer(""), tempo = as.integer(""), duration_ms = as.integer(""), time_signature = as.integer(""), danceability = as.integer(""))
+
+for (i in 1:nrow(unique_tracks)) {
+  
+  track_features <- get_audio_features(unique_tracks$track_id[i])
+  track_features <- track_features[c('energy', 'key', 'loudness',
+                    'mode','speechiness','acousticness','instrumentalness',
+                    'liveness', 'valence', 'tempo', 'duration_ms',
+                    'time_signature', 'danceability')]
+  unique_tracks[,c('energy','key','loudness','mode','speechiness',
+                   'acousticness','instrumentalness','liveness','valence',
+                   'tempo','duration_ms','time_signature','danceability')][i,] <- track_features
+  
+}
+
+# write.csv(unique_tracks, file = 'audio_analysis.csv')
+
+merge_master <- data.table(master_df, key = "track_id")
+merge_tracks <- data.table(unique_tracks, key = "track_id")
+master_df <- merge(merge_master, merge_tracks, by = "track_id", all = TRUE)
+
+master_df <- master_df %>%
+ select(position,artist,track_name,streams,date,followers,popularity,url,track_id,artist_id,g1,g2,g3,g4,g5,g6,g7,g8,g9,g10,g11,g12,g13,g14,g15,g16,g17,g18,g19,g20,energy,key,loudness,mode,speechiness,acousticness,instrumentalness,liveness,valence,tempo,duration_ms,time_signature,danceability) %>%
+ arrange(date, desc(streams))
+
+# write.csv(master_df, file = 'master_df.csv')
+```
+
+# DATABASE
+
+```{r}
+# MAKE NAMES SAFE FOR DATABASE
+dbSafeNames <- function(names) {
+  names <- gsub('[^a-z0-9]+', '_', tolower(names))
+  names <- make.names(names, unique=TRUE, allow_=TRUE)
+  names <- gsub('.','_',names, fixed=TRUE)
+}
+
+# RENAME MASTER_DF NAMES FOR DATABASE
+colnames(master_df) <- dbSafeNames(colnames(master_df))
+
+# CONNECT TO THE DATABASE
+Sys.setenv(SQL_PASSWORD = 'sql')
+pg <- dbDriver("PostgreSQL")
+driver <- dbDriver("PostgreSQL")
+dbconn <- dbConnect(driver, user="niconaut", password=Sys.getenv("SQL_PASSWORD"), host="localhost", port=5432, dbname="spotify")
+```
+
+```{r}
+# CREATE THE DATA FRAME IN THE DATABASE
+dbWriteTable(dbconn, 'top_200_of_2018', master_df, row.names=FALSE)
+```
+
+```{r}
+# PULL DATA FRAME FROM THE DATABASE
+master_df_sql <- dbGetQuery(dbconn, "select * from top_200_of_2018")
+master_df_sql <- as_data_frame(master_df_sql)
+row.names(master_df_sql) <- NULL
+master_df_sql <- master_df_sql %>%
+ select(position,artist,track_name,streams,date,followers,popularity,url,track_id,artist_id,g1,g2,g3,g4,g5,g6,g7,g8,g9,g10,g11,g12,g13,g14,g15,g16,g17,g18,g19,g20,energy,key,loudness,mode,speechiness,acousticness,instrumentalness,liveness,valence,tempo,duration_ms,time_signature,danceability) %>%
+ arrange(date, desc(streams))
+```
+
+# ACCESSING THE WHOLE DATA FRAME
+
+```{r}
+master_df <- read.csv('C:/Users/Nico/Desktop/Code/Projects/Spotify/master_df.csv')
+
+master_df <- as_tibble(master_df)
+
+row.names(master_df) <- NULL
+
+master_df <- master_df[,-1]
+
+master_df$track_name <- as.character(master_df$track_name)
+
+master_df$artist <- as.character(master_df$artist)
+
+master_df$streams <- as.integer(master_df$streams)
+
+master_df$url <- as.character(master_df$url)
+
+master_df$artist_id <- as.character(master_df$artist_id)
+
+master_df$date <- as.Date(master_df$date,format = '%Y-%m-%d')
+
+master_df$track_id <- as.character(master_df$track_id)
+
+master_df[,c('g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g11','g12','g13','g14','g15','g16','g17','g18','g19','g20')] <- lapply(master_df[,c('g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g11','g12','g13','g14','g15','g16','g17','g18','g19','g20')],as.character)
+```

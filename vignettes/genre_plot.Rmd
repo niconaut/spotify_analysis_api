@@ -1,0 +1,32 @@
+---
+title: "Genres"
+author: "Nicolaas VanSteenbergen"
+date: "8/7/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=F, warning=F}
+if(!require(readxl)){install.packages("readxl");require(readxl)}
+if(!require(reshape2)){install.packages("reshape2");require(reshape2)}
+if(!require(ggplot2)){install.packages("ggplot2");require(ggplot2)}
+```
+
+```{r}
+# manually set genres into a few categories due to the insane variety of Spotify's genres
+genres <- read_excel("genre_data.xlsx")
+melted_genre <- melt(genres)
+ggplot(melted_genre, aes(x = reorder(variable, value), y = value)) +
+  geom_bar(stat = "identity", fill = c("#60ce87","#4ac776","#33c065","#1db954","#1aa64b","#179443","#14813a","#116f32")) + 
+  coord_flip() + 
+  xlab("Genre") + 
+  ylab("Number of Artists") +
+  theme(legend.position = "none") + 
+  theme_minimal() + 
+  theme(text = element_text(size=15))
+
+# ggsave("genre.png", dpi = 300)
+```

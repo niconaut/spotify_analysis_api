@@ -1,0 +1,64 @@
+---
+title: "artist_spotlight"
+author: "Nicolaas VanSteenbergen"
+date: "8/8/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=F, warning=F}
+if(!require(dplyr)){install.packages("dplyr");require(dplyr)}
+if(!require(tidyverse)){install.packages("tidyverse");require(tidyverse)}
+# if(!require(ggplot2)){install.packages("ggplot2");require(ggplot2)}
+if(!require(lubridate)){install.packages("lubridate");require(lubridate)}
+if(!require(RColorBrewer)){install.packages("RColorBrewer");require(RColorBrewer)}
+```
+
+```{r}
+master_df <- read.csv('master_df.csv')
+
+master_df$date <- as.Date(master_df$date,format = '%Y-%m-%d')
+master_df$artist <- as.character(master_df$artist)
+master_df$streams <- as.numeric(master_df$streams)
+
+michael <- master_df %>%
+  filter(artist == "Michael BublÃ©", month(date) == 12) %>%
+  group_by(artist, date) %>%
+  summarise(daily_streams = sum(streams)) %>%
+  arrange(day(date),desc(daily_streams))
+
+x <- michael$daily_streams
+empty <- c(0, 0, 0, 0, 0)
+x <- append(x,empty)
+```
+
+```{r}
+clock.plot <- function (x, col = c("#a4e3ba","#a4e3ba","#8edca9","#8edca9","#77d598","#77d598","#60ce87","#60ce87","#4ac776","#4ac776","#33c065","#33c065","#1db954","#1db954","#1aa64b","#1aa64b","#179443","#179443","#14813a","#14813a","#116f32","#116f32","#0e5c2a","#0e5c2a","#0b4a21","#0b4a21"), ...) {
+  if( min(x)<0 ) x <- x - min(x)
+  if( max(x)>1 ) x <- x/max(x)
+  n <- length(x)
+  if(is.null(names(x))) names(x) <- 0:(n-1)
+  m <- 1.05
+  plot(0, type = 'n', xlim = c(-m,m), ylim = c(-m,m), axes = F, xlab = '', ylab = '', ...)
+  a <- pi/2 - 2*pi/200*0:200
+  polygon( cos(a), sin(a) )
+  v <- .02
+  a <- pi/2 - 2*pi/n*0:n
+  segments( (1+v)*cos(a), (1+v)*sin(a), (1-v)*cos(a), (1-v)*sin(a))
+  segments( cos(a), sin(a),0, 0, col = 'light gray', lty = 3) 
+  ca <- -2*pi/n*(0:50)/50
+  for (i in 1:n) {
+    a <- pi/2 - 2*pi/n*(i-1)
+    b <- pi/2 - 2*pi/n*i
+    polygon( c(0, x[i]*cos(a+ca), 0), c(0, x[i]*sin(a+ca), 0), col=col[i] )
+    v <- .1
+    text((1+v)*cos(a), (1+v)*sin(a), names(x)[i])
+  }
+}
+
+# Use the function on the created data
+clock.plot(x, main = "Number of Streams for Michael Buble in December", cex=3)
+```

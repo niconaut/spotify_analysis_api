@@ -1,0 +1,57 @@
+---
+title: "artist_weekly_plot"
+author: "Nicolaas VanSteenbergen"
+date: "8/8/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=F, warning=F}
+if(!require(dplyr)){install.packages("dplyr");require(dplyr)}
+if(!require(lubridate)){install.packages("lubridate");require(lubridate)}
+if(!require(ggplot2)){install.packages("ggplot2");require(ggplot2)}
+```
+
+```{r}
+master_df <- read.csv("master_df.csv")
+
+master_df$date <- as.Date(master_df$date,format = '%Y-%m-%d')
+master_df$artist <- as.character(master_df$artist)
+master_df$streams <- as.numeric(master_df$streams)
+
+master_df <- master_df %>%
+  mutate(week = week(date))
+```
+
+```{r}
+top_artists <- master_df %>%
+  group_by(artist) %>%
+  summarise(total_streams = sum(streams)) %>%
+  arrange(desc(total_streams)) %>% 
+  top_n(6)
+
+top_artists <- top_artists$artist
+top_artists <- c(top_artists,'Queen')
+
+weekly_streams <- master_df %>%
+  filter(artist %in% top_artists) %>%
+  group_by(artist, week) %>%
+  summarise(streams_each_week = sum(streams)) %>%
+  arrange(week,desc(streams_each_week))
+```
+
+```{r}
+ggplot(weekly_streams) + geom_line(aes(x = week, y = weekly_streams$streams_each_week, color= weekly_streams$artist)) + 
+  scale_y_continuous(labels = scales::comma) + 
+  xlab("Week") + 
+  ylab("Number of Streams") +
+  ggtitle("Top Artists by Week") + 
+  labs(colour="Artist") + 
+  theme_minimal() +
+  theme(text = element_text(size=16))
+
+# ggsave("top_artists.png", dpi=1000, height = 12, width = 32, units = 'in')
+```
