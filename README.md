@@ -14,4 +14,4 @@ Plots: Nicolaas VanSteenbergen, Trevor Koger, Christian Dauel, Ryan Fitzgibbons 
 
 Using Spotify's Top 200 charts pulled from thier website and the API, I analyze trends and develop interesting insights.
 
-<img src="images/poster.png" alt="before" width="70%" height="70%"/>
+<img src="poster.png" alt="poster" width="70%" height="70%"/>
